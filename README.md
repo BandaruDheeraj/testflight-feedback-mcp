@@ -21,6 +21,7 @@ Apple doesn't expose TestFlight feedback text/comments via their public API ([fa
 | `list_feedback` | List all feedback: screenshots, crashes, and text comments |
 | `get_feedback_detail` | Get full details for a specific feedback submission |
 | `get_crash_log` | Download crash log content for a crash submission |
+| `respond_to_feedback` | Email a tester that their feedback has been addressed |
 
 ## Setup
 
@@ -115,6 +116,24 @@ Add to `.vscode/mcp.json`:
   }
 }
 ```
+
+## Optional: Respond to Testers via Email (SMTP)
+
+The `respond_to_feedback` tool looks up the tester's email from a feedback submission and sends them a response. Configure any SMTP provider:
+
+```bash
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password          # Use App Password for Gmail
+SMTP_FROM=your-email@gmail.com       # Optional, defaults to SMTP_USER
+APP_NAME=My App                      # Shows in the email footer
+```
+
+Works with Gmail, Outlook, custom SMTP, etc. The tool:
+1. Fetches the submission to get the tester's email + build version
+2. Sends a nicely formatted HTML email with your message
+3. Returns confirmation with tester name, email, and message ID
 
 ## Optional: Full Text Feedback (Browser Auth)
 

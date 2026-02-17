@@ -21,6 +21,10 @@ import {
   handleGetFeedbackDetail,
 } from "./tools/get-feedback-detail.js";
 import { getCrashLogSchema, handleGetCrashLog } from "./tools/get-crash-log.js";
+import {
+  respondToFeedbackSchema,
+  handleRespondToFeedback,
+} from "./tools/respond-to-feedback.js";
 
 async function main() {
   const config = await loadConfig();
@@ -113,6 +117,18 @@ async function main() {
       const result = await handleGetCrashLog(client, args);
       return {
         content: [{ type: "text", text: result.crashLog }],
+      };
+    }
+  );
+
+  server.tool(
+    "respond_to_feedback",
+    "Send an email to a beta tester letting them know their feedback has been addressed. Looks up the tester's email from the submission and sends via SMTP.",
+    respondToFeedbackSchema.shape,
+    async (args) => {
+      const result = await handleRespondToFeedback(client, args);
+      return {
+        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
     }
   );
