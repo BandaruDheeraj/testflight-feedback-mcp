@@ -25,11 +25,12 @@ export async function listScreenshotFeedback(
   submissions: BetaFeedbackScreenshotSubmission[];
   included: JsonApiResource[];
 }> {
+  // Apple forbids GET on the top-level /betaFeedbackScreenshotSubmissions collection
+  // (403 FORBIDDEN_ERROR). It is only readable as an app-scoped sub-resource.
   const params: Record<string, string> = {
-    "filter[app]": options.appId,
     limit: String(options.limit ?? 50),
-    sort: options.sort ?? "-timestamp",
-    include: "betaTester,build",
+    sort: options.sort ?? "-createdDate",
+    include: "tester,build",
     "fields[betaTesters]": "firstName,lastName,email",
     "fields[builds]": "version",
   };
@@ -39,7 +40,7 @@ export async function listScreenshotFeedback(
   }
 
   const response = await client.requestAll<BetaFeedbackScreenshotSubmission>(
-    "/betaFeedbackScreenshotSubmissions",
+    `/apps/${options.appId}/betaFeedbackScreenshotSubmissions`,
     params
   );
   return { submissions: response.data, included: response.included };
@@ -55,11 +56,11 @@ export async function listCrashFeedback(
   submissions: BetaFeedbackCrashSubmission[];
   included: JsonApiResource[];
 }> {
+  // Same constraint as screenshots: only readable as an app-scoped sub-resource.
   const params: Record<string, string> = {
-    "filter[app]": options.appId,
     limit: String(options.limit ?? 50),
-    sort: options.sort ?? "-timestamp",
-    include: "betaTester,build",
+    sort: options.sort ?? "-createdDate",
+    include: "tester,build",
     "fields[betaTesters]": "firstName,lastName,email",
     "fields[builds]": "version",
   };
@@ -69,7 +70,7 @@ export async function listCrashFeedback(
   }
 
   const response = await client.requestAll<BetaFeedbackCrashSubmission>(
-    "/betaFeedbackCrashSubmissions",
+    `/apps/${options.appId}/betaFeedbackCrashSubmissions`,
     params
   );
   return { submissions: response.data, included: response.included };
@@ -176,7 +177,9 @@ export function toFeedbackItems(
   type: "screenshot" | "crash"
 ): FeedbackItem[] {
   return submissions.map((sub) => {
-    const testerRef = sub.relationships?.betaTester?.data;
+    // Apple's relationship key is `tester` (not `betaTester`).
+    const testerRef =
+      sub.relationships?.tester?.data ?? sub.relationships?.betaTester?.data;
     const buildRef = sub.relationships?.build?.data;
 
     const tester =
@@ -198,14 +201,16 @@ export function toFeedbackItems(
       | undefined;
 
     const attrs = sub.attributes as unknown as Record<string, unknown>;
-    const screenshotAsset = attrs.screenshotAsset as
-      | { templateUrl?: string }
+    // Official API exposes screenshots as an array of { url, ... } objects.
+    const screenshots = attrs.screenshots as
+      | Array<{ url?: string }>
       | undefined;
 
     return {
       id: sub.id,
       type,
-      timestamp: attrs.timestamp as string,
+      // Official API uses `createdDate`, not `timestamp`.
+      timestamp: (attrs.createdDate as string) ?? (attrs.timestamp as string),
       comment: (attrs.comment as string) ?? null,
       testerName: testerAttrs
         ? `${testerAttrs.firstName ?? ""} ${testerAttrs.lastName ?? ""}`.trim() || null
@@ -216,17 +221,20 @@ export function toFeedbackItems(
       osVersion: attrs.osVersion as string,
       locale: attrs.locale as string,
       carrier: (attrs.carrier as string) ?? null,
-      timezone: attrs.timezone as string,
+      timezone: (attrs.timeZone as string) ?? (attrs.timezone as string) ?? null,
       architecture: attrs.architecture as string,
-      connectionStatus: attrs.connectionStatus as string,
+      connectionStatus:
+        (attrs.connectionType as string) ?? (attrs.connectionStatus as string) ?? null,
       batteryPercentage: (attrs.batteryPercentage as number) ?? null,
-      appUptime: (attrs.appUptime as number) ?? null,
+      appUptime:
+        (attrs.appUptimeInMilliseconds as number) ?? (attrs.appUptime as number) ?? null,
       screenResolution:
-        attrs.screenWidth != null
-          ? `${attrs.screenWidth}x${attrs.screenHeight}`
+        attrs.screenWidthInPoints != null
+          ? `${attrs.screenWidthInPoints}x${attrs.screenHeightInPoints}`
           : null,
-      diskSpaceFree: (attrs.diskSpaceFree as number) ?? null,
-      screenshotUrl: screenshotAsset?.templateUrl ?? null,
+      diskSpaceFree:
+        (attrs.diskBytesAvailable as number) ?? (attrs.diskSpaceFree as number) ?? null,
+      screenshotUrl: screenshots?.[0]?.url ?? null,
       crashLogUrl:
         type === "crash"
           ? `https://api.appstoreconnect.apple.com/v1/betaFeedbackCrashSubmissions/${sub.id}/relationships/crashLog`
